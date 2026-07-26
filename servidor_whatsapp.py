@@ -15,26 +15,25 @@ def buscar_en_excel(consulta):
     try:
         # Lee todas las pestañas del Excel
         excel_data = pd.read_excel(archivo_excel, sheet_name=None)
+        consulta_lower = str(consulta).lower().strip()
         
-        resultados = []
-        consulta_lower = str(consulta).lower()
-        
+        debug_filas = []
         # Recorre cada pestaña buscando coincidencias
         for hoja, df in excel_data.items():
             for index, row in df.iterrows():
-                # Convertimos cada celda a string solo si no está vacía (evita floats y NaNs)
+                # Convertimos cada celda a string solo si no está vacía
                 valores_fila = [str(val) for val in row.values if pd.notna(val)]
                 fila_texto = " ".join(valores_fila).lower()
+                debug_filas.append(fila_texto) # Guardamos para ver qué lee el bot
                 
                 if consulta_lower in fila_texto:
                     # Armamos el texto de forma segura filtrando nulos
                     detalle = " | ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
-                    resultados.append(f"[{hoja}] " + detalle)
+                    return f"📋 Encontrado en [{hoja}]:\n{detalle}"
         
-        if resultados:
-            return "📋 Aquí tienes la información encontrada:\n\n" + "\n".join(resultados[:3])
-        else:
-            return "No encontré información relacionada con tu consulta en el Excel."
+        # Si no encuentra nada, te muestra un pedazo de lo que el bot leyó realmente en el Excel
+        muestra = " // ".join(debug_filas[:2]) if debug_filas else "Excel vacío"
+        return f"🔍 Busqué '{consulta_lower}', pero esto es lo que leí en el Excel: {muestra}"
             
     except Exception as e:
         return f"Error al leer el Excel: {str(e)}"
@@ -55,5 +54,4 @@ def whatsapp_reply():
     return xml_respuesta, 200, {'Content-Type': 'text/xml'}
 
 if __name__ == "__main__":
-    # Corre Flask en el puerto 5000
     app.run(port=5000)
