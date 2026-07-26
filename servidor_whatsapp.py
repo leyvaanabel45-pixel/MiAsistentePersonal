@@ -22,9 +22,14 @@ def buscar_en_excel(consulta):
         # Recorre cada pestaña buscando coincidencias
         for hoja, df in excel_data.items():
             for index, row in df.iterrows():
-                fila_texto = " ".join(row.astype(str)).lower()
+                # Convertimos cada celda a string solo si no está vacía (evita floats y NaNs)
+                valores_fila = [str(val) for val in row.values if pd.notna(val)]
+                fila_texto = " ".join(valores_fila).lower()
+                
                 if consulta_lower in fila_texto:
-                    resultados.append(f"[{hoja}] " + " | ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)]))
+                    # Armamos el texto de forma segura filtrando nulos
+                    detalle = " | ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
+                    resultados.append(f"[{hoja}] " + detalle)
         
         if resultados:
             return "📋 Aquí tienes la información encontrada:\n\n" + "\n".join(resultados[:3])
