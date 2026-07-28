@@ -13,40 +13,48 @@ def buscar_en_excel(consulta):
         return "⚠️ No encuentro el archivo Planificador.xlsx en la carpeta."
     
     try:
-        # Lee todas las pestañas del Excel
+        # Lee TODAS las pestañas del Excel al mismo tiempo
         excel_data = pd.read_excel(archivo_excel, sheet_name=None)
         consulta_lower = str(consulta).lower().strip()
         
-        debug_filas = []
-        # Recorre cada pestaña buscando coincidencias
-        for hoja, df in excel_data.items():
-            for index, row in df.iterrows():
-                # Convertimos cada celda a string solo si no está vacía
-                valores_fila = [str(val) for val in row.values if pd.notna(val)]
-                fila_texto = " ".join(valores_fila).lower()
-                debug_filas.append(fila_texto) # Guardamos para ver qué lee el bot
-                
-                if consulta_lower in fila_texto:
-                    # Armamos el texto de forma segura filtrando nulos
-                    detalle = " | ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
-                    return f"📋 Encontrado en [{hoja}]:\n{detalle}"
+        resultados = []
         
-        # Si no encuentra nada, te muestra un pedazo de lo que el bot leyó realmente en el Excel
-        muestra = " // ".join(debug_filas[:2]) if debug_filas else "Excel vacío"
-        return f"🔍 Busqué '{consulta_lower}', pero esto es lo que leí en el Excel: {muestra}"
+        # Recorre cada pestaña (Universidad, Gastos, Deporte, Vida_social, etc.)
+        for hoja, df in excel_data.items():
+            # Recorre fila por fila dentro de esa pestaña
+            for index, row in df.iterrows():
+                # Revisa si la palabra que buscas está en alguna celda de esta fila
+                fila_coincide = False
+                for col, val in row.items():
+                    if pd.notna(val) and consulta_lower in str(val).lower():
+                        fila_coincide = True
+                        break
+                
+                # Si encuentra coincidencia en esta fila, extrae los datos ordenados
+                if fila_coincide:
+                    detalles = []
+                    for col, val in row.items():
+                        if pd.notna(val):
+                            detalles.append(f"*{col}*: {val}")
+                    
+                    item_resultado = f"📌 Encontrado en pestaña [{hoja}]:\n" + " | ".join(detalles)
+                    if item_resultado not in resultados:
+                        resultados.append(item_resultado)
+        
+        if resultados:
+            # Te muestra hasta 3 coincidencias relevantes de cualquiera de las pestañas
+            return "📋 Aquí tienes la información:\n\n" + "\n\n".join(resultados[:3])
+        else:
+            return f"No encontré registros sobre '{consulta}' en ninguna de tus pestañas del Excel."
             
     except Exception as e:
         return f"Error al leer el Excel: {str(e)}"
 
 @app.route("/whatsapp", methods=['POST'])
 def whatsapp_reply():
-    # Obtiene el mensaje que mandaste desde WhatsApp
     mensaje_recibido = request.form.get('Body')
-    
-    # Busca la respuesta en tu Excel
     respuesta_excel = buscar_en_excel(mensaje_recibido)
     
-    # Prepara la respuesta para WhatsApp en formato XML
     xml_respuesta = f"""<Response>
     <Message>{respuesta_excel}</Message>
 </Response>"""
