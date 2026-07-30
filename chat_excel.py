@@ -27,7 +27,7 @@ def consultar_datos_y_enviar(palabra_clave):
     message = client.messages.create(
         body=mensaje_texto,
         from_=twilio_whatsapp_number,
-        to=tu_numero_whatsapp
+        to=tu_numero_whatsapp 
     )
     print(f"¡Mensaje enviado a tu WhatsApp con éxito! SID: {message.sid}")
 
