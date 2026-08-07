@@ -1,44 +1,71 @@
-import pandas as pd
 import os
+import unicodedata
+from flask import Flask, request
+import pandas as pd
 
-# Asegúrate de cambiar "tu_archivo.xlsx" por el nombre real de tu Excel
-archivo_excel = "Planificador.xlsx"
+app = Flask(__name__)
+archivo_excel = 'Planificador.xlsx'
 
-def cargar_excel():
+def quitar_acentos(texto):
+    nfkd_form = unicodedata.normalize('NFKD', str(texto))
+    return "".join([c for c in nfkd_form if not unicodedata.combining(c)]).lower().strip()
+
+def buscar_en_todo_el_excel(consulta):
     if not os.path.exists(archivo_excel):
-        print(f"⚠️ No encuentro el archivo '{archivo_excel}'. Guárdalo en esta misma carpeta.")
-        return None
+        return "⚠️ No encuentro el archivo Planificador.xlsx."
     
-    # Lee todas las pestañas (categorías) del Excel
-    excel_data = pd.read_excel(archivo_excel, sheet_name=None)
-    return excel_data
-
-def iniciar_chat():
-    datos = cargar_excel()
-    if datos is None:
-        return
-
-    print("\n✅ ¡Asistente de Excel listo y conectado!")
-    print("📂 Pestañas/Categorías encontradas:", list(datos.keys()))
-    print("Escribe 'salir' para terminar.\n")
-
-    while True:
-        pregunta = input("¿Qué quieres consultar de tu Excel?: ")
-        if pregunta.lower() == 'salir':
-            print("¡Hasta luego!")
-            break
-
-        encontrado = False
-        for categoria, df in datos.items():
-            texto_tabla = df.to_string(index=False).lower()
-            if pregunta.lower() in texto_tabla or categoria.lower() in pregunta.lower():
-                print(f"\n--- Encontrado en la categoría [{categoria}] ---")
-                print(df)
-                print("-" * 40)
-                encontrado = True
+    try:
+        consulta_limpia = quitar_acentos(consulta)
+        resultados = []
         
-        if not encontrado:
-            print("\n❌ No encontré esa información exacta en tus pestañas. Prueba escribiendo el nombre de la categoría o un término clave.")
+        # Leemos el archivo de Excel hoja por hoja de forma segura
+        xls = pd.ExcelFile(archivo_excel)
+        for hoja in xls.sheet_names:
+            df = pd.read_excel(xls, sheet_name=hoja)
+            
+            # Si el nombre de la hoja coincide con lo que buscas
+            if consulta_limpia in quitar_acentos(hoja):
+                resumen = df.to_string(index=False)
+                resultados.append(f"📂 Pestaña completa [{hoja}]:\n{resumen}")
+                continue
+            
+            # Buscar en las filas y columnas
+            for index, row in df.iterrows():
+                fila_coincide = False
+                for col, val in row.items():
+                    if pd.notna(val) and consulta_limpia in quitar_acentos(val):
+                        fila_coincide = True
+                        break
+                
+                if fila_coincide:
+                    detalles = []
+                    for col, val in row.items():
+                        if pd.notna(val):
+                            detalles.append(f"*{col}*: {val}")
+                    
+                    item_resultado = f"📌 [{hoja}] -> " + " | ".join(detalles)
+                    if item_resultado not in resultados:
+                        resultados.append(item_resultado)
+        
+        if resultados:
+            return "¡Hola Anabel! 📋 Encontré esto en tu Excel:\n\n" + "\n\n".join(resultados[:4])
+        else:
+            return f"No encontré ningún registro con '{consulta}' en tu Excel. ¡Prueba con otra palabra clave!"
+            
+    except Exception as e:
+        return f"Error leyendo el Excel: {str(e)}"
+
+@app.route("/whatsapp", methods=['POST'])
+def whatsapp_reply():
+    mensaje_recibido = request.form.get('Body', '')
+    respuesta_excel = buscar_en_excel(mensaje_recibido)
+    
+    xml_respuesta = f"""<Response>
+    <Message>{respuesta_excel}</Message>
+</Response>"""
+    
+    return xml_respuesta, 200, {'Content-Type': 'text/xml'}
 
 if __name__ == "__main__":
-    iniciar_chat()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
